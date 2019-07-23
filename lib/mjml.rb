@@ -6,36 +6,46 @@ require "mjml/railtie"
 require "rubygems"
 
 module Mjml
-  mattr_accessor :template_language, :raise_render_exception, :mjml_binary_version_supported, :mjml_binary_error_string, :beautify, :minify
+  mattr_accessor :template_language, :raise_render_exception, :mjml_binary_version_supported, :mjml_binary_error_string, :beautify, :minify, :mjml_path
 
   @@template_language = :erb
   @@raise_render_exception = true
   @@mjml_binary_version_supported = "4."
-  @@mjml_binary_error_string = "Couldn't find the MJML #{Mjml.mjml_binary_version_supported} binary.. have you run $ npm install mjml?"
+  @@mjml_binary_error_string = "Couldn't find the MJML #{Mjml.mjml_binary_version_supported} binary. Have you run $ yarn add mjml?"
   @@beautify = true
   @@minify = false
 
-  def self.check_version(bin)
-    IO.popen([bin, '--version']) { |io| io.read.include?("mjml-core: #{Mjml.mjml_binary_version_supported}") }
-  rescue
-    false
+  # Check if the mjml binaray at the provided path is the correct version
+  def self.check_version(path)
+    output, status = Open3.capture2(path, '--version')
+    status.success? && output.include?("mjml-core: #{Mjml.mjml_binary_version_supported}")
+  rescue Errno::ENOENT
+    return false
   end
 
-  def self.discover_mjml_bin
+  # Check if mjml exists and is the correct version at path
+  # If it is, set the value to Mjml.mjml_path
+  def self.try_path(path)
+    return false unless path && check_version(path)
+    Mjml.mjml_path = path
+    logger.info "Using mjml binary at #{path}"
+  end
+
+  def self.configure_mjml_path!
+    if Mjml.mjml_path
+      return if try_path(Mjml.mjml_path) 
+      raise "mjml at #{Mjml.mjml_path} is wrong version"
+    end
+
     # Check for a global install of MJML binary
-    mjml_bin = 'mjml'
-    return mjml_bin if check_version(mjml_bin)
+    return if try_path('mjml')
 
     # Check for a local install of MJML binary
-    installer_path = (`npm bin` || `yarn bin`).chomp
-    mjml_bin = File.join(installer_path, 'mjml')
-    return mjml_bin if check_version(mjml_bin)
-
-    puts Mjml.mjml_binary_error_string
-    nil
+    output, status = Open3.capture2("yarn bin mjml")
+    return if status.success? && try_path(output.chomp)
+  
+    raise Mjml.mjml_binary_error_string
   end
-
-  BIN = discover_mjml_bin
 
   class Handler
     def template_handler

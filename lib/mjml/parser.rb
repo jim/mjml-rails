@@ -48,7 +48,7 @@ module Mjml
       #
       # @return [String]
       def mjml_bin
-        Mjml::BIN
+        Mjml.mjml_path
       end
   end
 end
