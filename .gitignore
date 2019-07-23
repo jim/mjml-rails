@@ -3,3 +3,4 @@ Gemfile.lock
 test/tmp
 00*
 *.sublime-*
+node_modules
